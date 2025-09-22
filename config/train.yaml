@@ -1,0 +1,65 @@
+data:
+  dataset: uni
+  same_origin: false
+  complexity: "n"
+  ubound_per_batch: 1_500
+  max_batches: 60_000
+  path:
+    ### pretrain
+    ani1x_train: /path/to/dataset/ANI-1x/train_block
+    ani1x_valid: /path/to/dataset/ANI-1x/valid_block
+    pcqm_train: /path/to/dataset/pcqm4mv2/train_block
+    pcqm_valid: /path/to/dataset/pcqm4mv2/valid_block
+    pdb_train: /path/to/dataset/PDB/train_block
+    pdb_valid: /path/to/dataset/PDB/valid_block
+    pdbbind_train: /path/to/dataset/pdbbind_v11/train_block
+    pdbbind_valid: /path/to/dataset/pdbbind_v11/valid_block
+    # crossdocked_train: /path/to/dataset/CrossDocked/train_block
+    # crossdocked_valid: /path/to/dataset/CrossDocked/valid_block
+    ### dynamic
+    # atlas_train: /path/to/dataset/ATLAS/train_block_100ps
+    # atlas_valid: /path/to/dataset/ATLAS/valid_block_100ps
+    # misato_train: /path/to/dataset/MISATO/train_block_15_25_aligned
+    # misato_valid: /path/to/dataset/MISATO/val_block_15_25_aligned
+    ### RL
+    # dypdbbind_train: /path/to/dataset/PDBBind_All/train_block_10_20
+    # dypdbbind_valid: /path/to/dataset/PDBBind_All/valid_block_10_20
+
+training:
+  lr: 0.0001
+  loss_type: null
+  warmup: 1_000
+  max_epoch: 100
+  grad_clip: 1.0
+  batch_size: 5
+  patience: 8
+  save_topk: 10
+  shuffle: true
+  num_workers: 8
+  save_dir: ./ckpt/pretrain
+  wrapper:
+    ema:
+      update_after_step: 1_000_000
+
+model:
+  ref: null
+  ckpt: null
+  model_type: md
+  hidden_dim: 256
+  ffn_dim: 512
+  rbf_dim: 32
+  heads: 8
+  layers: 8
+  cutoff_lower: 0.0
+  cutoff_upper: 10.0
+  cutoff_H: 3.5
+  k_neighbors: 32
+  coord_prior_var: 0.5
+  sigma: 0.2
+  additional_noise_scale: 0.2
+  kl_weight: 0.8
+  re_weight: 1.0
+  reward_weight: 100.0
+  rl_sde_step: 10
+  using_ode: false
+  backbone: torchmdnet # equiformer-v2

@@ -1,0 +1,12 @@
+**__pycache__/
+**tmp/
+**wandb/
+**ckpt/
+fig/
+baselines/
+.idea
+*.old
+*.pdb
+*.zip
+*.fasta
+LICENSE
