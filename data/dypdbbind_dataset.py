@@ -118,5 +118,5 @@ if __name__ == "__main__":
     for _type in ["train", "valid"]:
         create_mmap(
             preprocess_pdbbind(os.path.join(base, f"{_type}.jsonl")),
-            os.path.join(base, f"{_type}_block_10_20")
+            os.path.join(base, f"{_type}_block")
         )

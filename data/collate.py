@@ -16,7 +16,7 @@ def collate_fn(batch):
         keys = ["atype", "btype", "edge_mask", "mask", "x0", "b0"]
         types = [torch.long] * 3 + [torch.bool] + [torch.float] * 2
         flattens = [True] * 4 + [False] * 2
-    
+
     if batch[0].get("x_ref") is not None:
         keys.append("x_ref")
         types.append(torch.float)

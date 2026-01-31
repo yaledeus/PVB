@@ -2,11 +2,8 @@
 **tmp/
 **wandb/
 **ckpt/
-fig/
-baselines/
 .idea
-*.old
 *.pdb
 *.zip
 *.fasta
-LICENSE
+*.old

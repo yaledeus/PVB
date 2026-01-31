@@ -37,7 +37,7 @@ def load_traj(trajfile, top):
     return traj
 
 
-def traj_analysis(traj_model_path, traj_ref_path, top=None, lagtime=10, use_distances=True, plot=False):
+def traj_analysis(traj_model_path, traj_ref_path, top=None, lagtime=10, reduced=False, use_distances=True, plot=False):
     out = {}
 
     traj_model = load_traj(traj_model_path, top=top)
@@ -49,19 +49,23 @@ def traj_analysis(traj_model_path, traj_ref_path, top=None, lagtime=10, use_dist
         with open(tica_model_path, "rb") as f:
             tica_model = pickle.load(f)
     else:
-    # lagtime: ATLAS 10(x10=100ps)
-        tica_model = run_tica(traj_ref, lagtime=lagtime, dim=2, use_distances=use_distances)
+    # lagtime: ATLAS 10 (x10=100ps), mdCATH 1 (x1=1ns)
+        tica_model = run_tica(traj_ref, lagtime=lagtime, dim=2, reduced=reduced, use_distances=use_distances)
         with open(tica_model_path, "wb") as f:
             pickle.dump(tica_model, f)
     
-    # include replica 2/3 trajectories
-    for r in ['R2', 'R3']:
-        traj_ref_replica = load_traj(traj_ref_path.replace('R1', r), top=top)
-        traj_ref = traj_ref.join(traj_ref_replica)
+    # include replica generated trajectories
+    replicas = glob.glob(f'{traj_ref_path[:-5]}*.xtc')
+    for replica in replicas:
+        if replica == traj_ref_path or replica.endswith('R4.xtc'):  # '{cath_domain}_R4.xtc' for reference
+            continue
+        traj_rep = load_traj(replica, top=top)
+        traj_ref = traj_ref.join(traj_rep)
 
     # compute tica
-    features, contact_pairs = tica_features(traj_ref, use_distances=use_distances, contact_pairs=None)
-    feat_model, _ = tica_features(traj_model, use_distances=use_distances, contact_pairs=contact_pairs)
+    feat_func = tica_features if not reduced else reduced_tica_features
+    features, contact_pairs = feat_func(traj_ref, use_distances=use_distances, contact_pairs=None)
+    feat_model, _ = feat_func(traj_model, use_distances=use_distances, contact_pairs=contact_pairs)
     tics_ref = tica_model.transform(features)
     tics_model = tica_model.transform(feat_model)
     tic_js = compute_js_distance(tics_ref[:, :2], tics_model[:, :2])
@@ -140,9 +144,6 @@ def traj_analysis(traj_model_path, traj_ref_path, top=None, lagtime=10, use_dist
         pdb = 'anony'   # TODO: replace the name as you want
         name = 'PVB'
         # TIC
-        # tic_range = ((tics_ref[:, 0].min(), tics_ref[:, 0].max()), (tics_ref[:, 1].min(), tics_ref[:, 1].max()))
-        # plot_tic2d_kde(tics_ref[:, 0], tics_ref[:, 1], f"fig/{pdb}/tic2d_md.pdf", tic_range=tic_range, name="MD")
-        # plot_tic2d_kde(tics_model[:, 0], tics_model[:, 1], f"fig/{pdb}/tic2d_{name}.pdf", tic_range=tic_range, name=name)
         plot_free_energy(tics_ref[:, 0], tics_model[:, 0], f"fig/{pdb}/free_energy_on_tic0.pdf", xlabel='TIC 0', name=name)
         plot_free_energy(tics_ref[:, 1], tics_model[:, 1], f"fig/{pdb}/free_energy_on_tic1.pdf", xlabel='TIC 1', name=name)
         # MSM
@@ -157,13 +158,14 @@ def parse():
     arg_parser.add_argument('--ref', type=str, required=True, help='reference trajectory file path')
     arg_parser.add_argument('--model', type=str, required=True, help='model generated trajectory file path')
     arg_parser.add_argument('--lagtime', type=int, help='lagtime for performing TICA')
+    arg_parser.add_argument('--reduced', action='store_true', default=False, help='only use backbone dihedrals as projected features')
     arg_parser.add_argument('--use_distances', action='store_true', help='[Optional] using pairwise distances as projected features')
     arg_parser.add_argument('--plot', action='store_true', help='[Optional] plot figures after evaluation')
     return arg_parser.parse_args()
 
 
 def main(args):
-    traj_analysis(args.model, args.ref, top=args.top, use_distances=args.use_distances, plot=args.plot)
+    traj_analysis(args.model, args.ref, top=args.top, reduced=args.reduced, use_distances=args.use_distances, plot=args.plot)
 
 
 if __name__ == "__main__":

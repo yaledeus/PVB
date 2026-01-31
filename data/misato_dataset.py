@@ -173,8 +173,6 @@ def preprocess_misato_pl(md_data_file, idx_file, rst_path):
             x1 = x1 - xc
             b1 = b1 - xc
 
-            # print(f"x1 - x0: {np.max(np.sqrt(np.sum((x1-x0)**2, axis=-1)))}")
-
             data = {
                 "atype": atype[max_indices].tolist(),
                 "btype": btype[max_indices].tolist(),
@@ -204,7 +202,7 @@ if __name__ == "__main__":
     datasetMD = os.path.join(args.data_dir, "MD.hdf5")
     rstPath = os.path.join(args.data_dir, "parameter_restart_files_MD")
     md_data = h5py.File(datasetMD, 'r')
-    splits = ["train", "val", "test"]
+    splits = ["train", "val", "test"]   # "test"
     # pre-process .top + .rst to .pdb format
     for split in splits:
         idx_file = os.path.join(args.data_dir, f"{split}_MD.txt")
@@ -224,48 +222,46 @@ if __name__ == "__main__":
         idx_file = os.path.join(args.data_dir, f"{split}_MD.txt")
         create_mmap(
             preprocess_misato_pl(datasetMD, idx_file, rstPath),
-            os.path.join(args.data_dir, f"{split}_block_15_25_aligned")
+            os.path.join(args.data_dir, f"{split}_block")
         )
-    
-    for split in ["test"]:
-        with open(idx_file, 'r') as f:
-            ids = f.read().splitlines()
-        data = []
-        for id in tqdm(ids):
-            # cutoff = pitem["molecules_begin_atom_index"][:][-1]
-            # z = np.array(pitem["atoms_number"][:][:cutoff], dtype=np.int64) - 1     # start from H = 0
-            xyz = np.array(get_entries(id, md_data), dtype=np.float32)  # (100, N, 3)
-            top_path = os.path.join(rstPath, id.lower(), f"{id}.pdb")
-            if not os.path.exists(top_path):
-                continue
-            try:
-                top = md.load(top_path).topology
-                atype, btype, a_index, b_index, bond_index, edge_mask = get_block_from_complex(top)
-            except BaseException as e:
-                print(f"errno: {e}")
-                continue
+        # with open(idx_file, 'r') as f:
+        #     ids = f.read().splitlines()
+        # data = []
+        # for id in tqdm(ids):
+        #     # cutoff = pitem["molecules_begin_atom_index"][:][-1]
+        #     # z = np.array(pitem["atoms_number"][:][:cutoff], dtype=np.int64) - 1     # start from H = 0
+        #     xyz = np.array(get_entries(id, md_data), dtype=np.float32)  # (100, N, 3)
+        #     top_path = os.path.join(rstPath, id.lower(), f"{id}.pdb")
+        #     if not os.path.exists(top_path):
+        #         continue
+        #     try:
+        #         top = md.load(top_path).topology
+        #         atype, btype, a_index, b_index, bond_index, edge_mask = get_block_from_complex(top)
+        #     except BaseException as e:
+        #         print(f"errno: {e}")
+        #         continue
 
-            # rule out complexes w/o ligand
-            if sum(edge_mask == 1) == 0:
-                continue
+        #     # rule out complexes w/o ligand
+        #     if sum(edge_mask == 1) == 0:
+        #         continue
             
-            top = md.load(top_path)
-            new_top = top.atom_slice(a_index)
-            new_top.save_pdb(state0_path := os.path.join(rstPath, id.lower(), f"{id}_post.pdb"))
+        #     top = md.load(top_path)
+        #     new_top = top.atom_slice(a_index)
+        #     new_top.save_pdb(state0_path := os.path.join(rstPath, id.lower(), f"{id}_post.pdb"))
 
-            xyz = xyz[:, a_index] / 10   # Angstrom => nm
-            md.Trajectory(
-                xyz,
-                new_top.topology
-            ).save_xtc(traj_path := os.path.join(rstPath, id.lower(), f"{id}_post.xtc"))
+        #     xyz = xyz[:, a_index] / 10   # Angstrom => nm
+        #     md.Trajectory(
+        #         xyz,
+        #         new_top.topology
+        #     ).save_xtc(traj_path := os.path.join(rstPath, id.lower(), f"{id}_post.xtc"))
 
-            data.append({
-                "pdb": id,
-                "state0_path": state0_path,
-                "traj_path": traj_path
-            })
+        #     data.append({
+        #         "pdb": id,
+        #         "state0_path": state0_path,
+        #         "traj_path": traj_path
+        #     })
         
-        with open(os.path.join(args.data_dir, f"{split}.jsonl"), "w") as f:
-            for item in data:
-                item_str = json.dumps(item)
-                f.write(f"{item_str}\n")
+        # with open(os.path.join(args.data_dir, f"{split}.jsonl"), "w") as f:
+        #     for item in data:
+        #         item_str = json.dumps(item)
+        #         f.write(f"{item_str}\n")

@@ -1,0 +1,9 @@
+data_type: protein                        # specify the data type: protein monomers ("protein"), MISATO ("misato"), PDBBind ("pdbbind")
+test_set: dataset/ATLAS/test.jsonl        # specify the indexing file (.jsonl) path for the test set
+gen_dir: /path/to/results                 # path to the directory where generated trajectories are saved
+lagtime: 10                               # lag time for TICA, default: 10 (100 ps) for ATLAS, 1 (1 ns) for mdCATH
+reduced: true                             # whether to use reduced TICA features (only backbone torsions), specify true for ATLAS and false for mdCATH
+use_distances: true                       # whether to use distances of contacting heavy atom pairs as TICA features, which is mutually exclusive with the `reduced` parameter. default: true
+### the following parameters are used to distinguish different inference settings
+sde_step: 10                              # discrete SDE step for inference
+inf_step: 1000                            # trajectory rollouts

@@ -11,28 +11,6 @@ def create_save_dir(save_path):
     os.makedirs(save_dir, exist_ok=True)
 
 
-def plot_tic2d_hist(tic0, tic1, save_path, tic_range=None, bins=200, xlabel='TIC0', ylabel='TIC1', name=None):
-    create_save_dir(save_path)
-
-    if tic_range is None:
-        tic_range = ((tic0.min(), tic0.max()), (tic1.min(), tic1.max()))
-
-    plt.figure(figsize=(16, 12))
-    ax = plt.gca()
-    ax.hist2d(tic0, tic1, bins=bins, cmap="OrRd", norm=LogNorm(), range=tic_range)
-    ax.set_xlim(tic_range[0][0], tic_range[0][1])
-    ax.set_ylim(tic_range[1][0], tic_range[1][1])
-    ax.tick_params(axis='both', labelsize=30)
-    ax.set_xlabel(xlabel, color='black', fontsize=50)
-    ax.set_ylabel(ylabel, color='black', fontsize=50)
-    plt.title(f"{name}", fontsize=50)
-    # ax.axis('off')
-    # ax.set_frame_on(False)
-
-    plt.savefig(save_path, format='pdf')
-    plt.clf()
-
-
 def plot_tic2d_kde(tic0, tic1, save_path, tic_range=None, xlabel='TIC0', ylabel='TIC1', name=None):
     create_save_dir(save_path)
 
@@ -312,16 +290,16 @@ def plot_contact(contacts, save_path, dt=1, cutoff=1.2, name=None):
     Q = is_contact.sum(axis=1) / is_contact.shape[1]
     time = np.arange(len(Q)).astype(float) * dt # unit: $\mu$s
 
-    df = pd.DataFrame({"Time (μs)": time, "Q": Q})
+    df = pd.DataFrame({"Time (ns)": time, "Q": Q})
     sns.set_theme(style="white", context="talk", font_scale=1.4)
     plt.figure(figsize=(16, 12))
-    sns.lineplot(data=df, x="Time (μs)", y="Q", color="darkred", linewidth=4)
+    sns.lineplot(data=df, x="Time (ns)", y="Q", color="darkred", linewidth=4)
 
-    plt.fill_between(df["Time (μs)"], df["Q"], color="lightcoral", alpha=0.3)
+    plt.fill_between(df["Time (ns)"], df["Q"], color="lightcoral", alpha=0.3)
 
     plt.ylim(0, 1.05)
     plt.title(name, fontsize=50)
-    plt.xlabel("Time (μs)", fontsize=50)
+    plt.xlabel("Time (ns)", fontsize=50)
     plt.ylabel("Contacts", fontsize=50)
     plt.xticks(fontsize=30)
     plt.yticks(fontsize=30)

@@ -56,18 +56,6 @@ def main(args):
     model.eval()
     print(f"Model loaded.")
 
-    # load refiner
-    using_refiner = getattr(args, 'refiner')
-    if using_refiner:
-        print("Loading refiner...")
-        refiner = torch.load(args.refiner, map_location='cpu')
-        device = torch.device('cpu' if args.gpu == -1 else f'cuda:{args.gpu}')
-        refiner.to(device)
-        refiner.eval()
-        print(f"Refiner loaded.")
-    else:
-        print("No refiner specified.")
-
     if args.mode == 'single':
         items = [args.test_set]
     elif args.mode == "all":
@@ -97,9 +85,6 @@ def main(args):
             with torch.no_grad():
                 for _ in tqdm(range(args.inf_step)):
                     x = model.inference(batch, sde_step=args.sde_step)
-                    if using_refiner:
-                        batch["x0"] = x
-                        x = refiner.inference(batch, sde_step=args.sde_step)
                     # save positions, Angstrom => nm
                     x_numpy = x.cpu().numpy() / 10
                     positions.append(x_numpy)
@@ -175,7 +160,7 @@ def main(args):
             res.append([pdb, elapsed_time])
 
     df = pd.DataFrame(res, columns=cols)
-    df.to_csv(os.path.join(save_dir, f'infer_time_ode{args.sde_step}_inf{args.inf_step}.csv'), index=False)
+    df.to_csv(os.path.join(save_dir, f'process_time_ode{args.sde_step}_inf{args.inf_step}.csv'), index=False)
 
 
 if __name__ == "__main__":

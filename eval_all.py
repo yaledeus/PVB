@@ -37,7 +37,7 @@ def main(args):
         for pdb in test_pdbs:
             name, top, ref = pdb['pdb'], pdb['state0_path'], pdb['traj_path']
             model = os.path.join(gen_dir, name, f'{name}_{postfix}.xtc')
-            res = traj_analysis(model, ref, top=top, lagtime=args.lagtime, use_distances=args.use_distances)
+            res = traj_analysis(model, ref, top=top, lagtime=args.lagtime, reduced=args.reduced, use_distances=args.use_distances)
             res["PDB"] = name
             res_list.append(res)
     elif args.data_type == "pdbbind":

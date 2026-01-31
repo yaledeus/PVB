@@ -19,10 +19,8 @@ from utils.constants import *
 def preprocess_atlas(split_path, delta=1, _type="train"):
     """
     :param split_path: split summary file, jsonl format
-    :param delta: maximum time interval between training pairs, default 1(x100)ps
+    :param delta: maximum time interval between training pairs, default 10(x10)ps
     """
-    # save_dir = os.path.split(split_path)[0]
-    # split = os.path.split(split_path)[-1].split('.')[0]     # train/valid
     items = load_file(split_path)
 
     np.random.seed(42)
@@ -47,7 +45,6 @@ def preprocess_atlas(split_path, delta=1, _type="train"):
             pos0, pos1 = xyz[i], xyz[i + delta]
             x0, b0 = pos0[a_index], pos0[b_index]
             x1, b1 = pos1[a_index], pos1[b_index]
-            # x0, x1 = xyz[i], xyz[i + delta]
             n_subgraph = int(atype.shape[0] / SG_THRESH) + 1
             if n_subgraph <= 1:
                 xc = x0.mean(axis=0)

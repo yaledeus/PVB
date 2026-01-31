@@ -125,11 +125,14 @@ def compute_validity(traj, clash_threshold=0.3, bond_break_threshold=0.419) -> o
     return val_ca, valid_conformations
 
 
-def compute_rmsd_over_time(traj, init_pos):
-    ca_indices = traj.topology.select('name CA')
-    traj_ca_pos = traj.xyz[:, ca_indices, :]
-    init_pos = init_pos[ca_indices, :]
+def compute_rmsd_over_time(traj, init_pos, lagtime=500, nframe=1000):
+    alpha_carbons = traj.topology.select('name CA')
+    alpha_carbons_xyz = traj.xyz[:, alpha_carbons, :]
+    init_pos = init_pos[alpha_carbons, :]
+    nframe = min(nframe, int(alpha_carbons_xyz.shape[0] / lagtime))
+    selected_indices = np.arange(0, nframe * lagtime, lagtime, dtype=np.compat.long)
+    alpha_carbons_xyz = alpha_carbons_xyz[selected_indices]
     # nm => Angstrom
-    rmsd_over_time = 10 * np.array([compute_crmsd(pos, init_pos) for pos in traj_ca_pos], dtype=float)
+    rmsd_over_time = 10 * np.array([compute_crmsd(xyz, init_pos) for xyz in alpha_carbons_xyz], dtype=float)
     return rmsd_over_time
 

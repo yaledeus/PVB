@@ -46,6 +46,15 @@ def wrap(array):
     return np.sin(array), np.cos(array)
 
 
+def reduced_tica_features(trajectory, use_distances=False, selection=SELECTION, contact_pairs=None):
+    _, phi = md.compute_phi(trajectory)
+    _, psi = md.compute_psi(trajectory)
+    torus = np.concatenate([phi, psi], axis=1)
+    dihedrals = np.concatenate([*wrap(torus)], axis=1)
+    # dihedrals = np.concatenate([*wrap(phi), *wrap(psi)], axis=-1)
+    return dihedrals, None
+
+
 def tica_features(trajectory, use_dihedrals=True, use_distances=True, selection=SELECTION, contact_pairs=None):
     if use_dihedrals:
         _, phi = md.compute_phi(trajectory)
@@ -72,8 +81,11 @@ def tica_features(trajectory, use_dihedrals=True, use_distances=True, selection=
         return [], None
 
 
-def run_tica(trajectory, lagtime=500, dim=40, use_distances=False, pos_only=False, contact_pairs=None):
-    feats, _ = tica_features(trajectory, use_distances=use_distances, contact_pairs=contact_pairs)
+def run_tica(trajectory, lagtime=500, dim=40, reduced=False, use_distances=False, contact_pairs=None):
+    if not reduced:
+        feats, _ = tica_features(trajectory, use_distances=use_distances, contact_pairs=contact_pairs)
+    else:
+        feats, _ = reduced_tica_features(trajectory, use_distances=use_distances, contact_pairs=contact_pairs)
     tica = dt.decomposition.TICA(dim=dim, lagtime=lagtime)
     koopman_estimator = dt.covariance.KoopmanWeightingEstimator(lagtime=lagtime)
     reweighting_model = koopman_estimator.fit(feats).fetch_model()

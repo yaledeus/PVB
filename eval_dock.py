@@ -7,12 +7,71 @@ import pickle
 import shutil
 import subprocess
 import json
+import glob
 from rdkit import Chem
+from rdkit.Chem import rdMolDescriptors
 from scipy.stats import pearsonr
+import posebusters
+from posebusters import PoseBusters
 
 from utils.io import load_file
 from utils.dock_utils import docking_eval
+from utils.backbone_utils import compute_validity
 from post_process import traj_to_data, data_to_blocks, write_coord_to_sdf
+
+
+def pb_stereo_check(mol_pred):
+    # posebusters checck
+    mol = Chem.MolFromMolFile(mol_pred, sanitize=True)
+    res = posebusters.modules.distance_geometry.check_geometry(mol)['results']
+
+    # stereochemistry check
+    Chem.AssignStereochemistry(mol, force=True, cleanIt=True)
+
+    # ---- 1. Chiral center detection ----
+    chiral_centers = Chem.FindMolChiralCenters(
+        mol,
+        includeUnassigned=True,
+        useLegacyImplementation=False
+    )
+
+    num_undefined = 0
+    num_invalid = 0
+
+    for idx, label in chiral_centers:
+        if label == '?':
+            num_undefined += 1
+
+        atom = mol.GetAtomWithIdx(idx)
+        if not atom.HasProp('_CIPCode'):
+            num_invaid += 1
+        else:
+            cip = atom.GetProp('_CIPCode')
+            if cip not in ('R', 'S'):
+                num_invaid += 1
+
+    # ---- 2. Double-bond (E/Z) stereochemistry ----
+    num_invalid_double_bonds = 0
+
+    for bond in mol.GetBonds():
+        if bond.GetBondType() == Chem.BondType.DOUBLE:
+            stereo = bond.GetStereo()
+            if stereo not in (
+                Chem.BondStereo.STEREOZ,
+                Chem.BondStereo.STEREOE,
+                Chem.BondStereo.STEREONONE
+            ):
+                num_invalid_double_bonds += 1
+
+    # ---- 3. Summary ----
+    is_stereo_ok = (num_invalid == 0) and (num_undefined == 0) and (num_invalid_double_bonds == 0)
+
+    return {
+        'is_bond_ok': res['bond_lengths_within_bounds'],
+        'is_angle_ok': res['bond_angles_within_bounds'],
+        'no_clash': res['no_internal_clash'],
+        "is_stereochemistry_ok": is_stereo_ok,
+    }
 
 
 def traj_analysis(gen_protein_path, gen_ligand_path, protein_path, ligand_path, pocket_idx, pdb="anony"):
@@ -41,6 +100,15 @@ def traj_analysis(gen_protein_path, gen_ligand_path, protein_path, ligand_path, 
     gen_pocket_traj = gen_protein_traj.atom_slice(pocket_atom_index)
 
     save_dir = traj_to_data(gen_pocket_traj, gen_ligand_path, pdb=pdb)
+
+    # check ligand physicality
+    ligand_paths = glob.glob(os.path.join(save_dir, f"*.sdf"))
+    pb_check_res = [pb_stereo_check(mol_pred) for mol_pred in ligand_paths]
+    pb_check_summary = {k: sum(d[k] for d in pb_check_res) / len(pb_check_res) for k in pb_check_res[0]}
+    
+    # check protein physicality
+    val_ca, _ = compute_validity(gen_protein_traj)
+
     data_to_blocks(save_dir, pdb=pdb, n_samples=len(gen_pocket_traj))
     # ept_predict(save_dir, gpu=gpu)
     subprocess.run(f"cd ept && python inference.py {save_dir} && cd ..", shell=True, check=True)
@@ -61,6 +129,9 @@ def traj_analysis(gen_protein_path, gen_ligand_path, protein_path, ligand_path, 
     metrics = docking_eval(gen_protein_path, gen_ligand_path, protein_path, ligand_path, pocket_idx)
     
     shutil.rmtree(save_dir)
+
+    metrics.update(pb_check_summary)
+    metrics.update({'Validity CA': val_ca})
 
     for k, v in metrics.items():
         print(f"{k}: {v}")

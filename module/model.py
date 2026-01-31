@@ -4,14 +4,13 @@ import numpy as np
 import math
 from copy import deepcopy
 from .torchmd_et import TorchMD_VQ_ET, ParamGVPFFNLayer, _init_linear_
-from .equiformer_v2.equiformer_v2_oc20 import EquiformerV2_OC20 as EquiformerV2
+# from .equiformer_v2.equiformer_v2_oc20 import EquiformerV2_OC20 as EquiformerV2
 from .interpolant_matcher import INTERP_MATCHER
 from .graph import construct_edges
 import pdb
 
 from utils import *
-from utils.geometry import random_rotation_matrix, compute_crmsd, compute_crmsd_torch
-from utils.torchmd_utils import scatter
+from utils.geometry import random_rotation_matrix, compute_crmsd_torch
 
 
 def compute_grad(v, x, grad_outputs=None, create_graph=False):
@@ -143,28 +142,7 @@ class dyVAE(nn.Module):
         x0, b0, atype, btype, abid, mask, edge_mask, bond_index = batch["x0"], batch["b0"], batch["atype"], batch["btype"], batch["abid"], batch["mask"], batch["edge_mask"], batch["bond_index"]
         if mode == "md":
             x1 = batch["x1"]
-        '''
-        # specialize if CUDA out of memory
-        x0, atype, btype, abid, edge_mask = x0[mask], atype[mask], btype[mask], abid[mask], edge_mask[mask]
-        if mode == "md":
-            x1 = x1[mask]
-        max_indices_list = torch.where(mask == 1)[0].tolist()
-        # re-index bond index
-        index_mapping = {x: max_indices_list.index(x) for x in max_indices_list}
-        bond_index_slice = []
-        src, dst = bond_index.tolist()
-        for begin, end in zip(src, dst):
-            begin = index_mapping.get(begin, -1)
-            end = index_mapping.get(end, -1)
-            if begin == -1 or end == -1:
-                continue
-            bond_index_slice.append([begin, end])
-        bond_index = torch.tensor(bond_index_slice, dtype=torch.long, device=x0.device).T
-        if bond_index.numel() == 0:
-            pdb.set_trace()
-        mask = torch.ones_like(atype).bool()
-        '''
-        # each heavy atom as mu
+        # the prior of latent variables is a Gaussian centered at the original positions for each heavy atom of x0
         b0 = x0.clone()
 
         clean_x0 = x0.clone()
@@ -369,7 +347,7 @@ class dyAdjMatch(nn.Module):
                 ligand_index = torch.where(
                     torch.logical_and((edge_mask == 1), (abid == i))
                 )[0]
-                R = torch.from_numpy(random_rotation_matrix(angle_limit=np.pi / 3))
+                R = torch.from_numpy(random_rotation_matrix(angle_limit=np.pi / 3)) # np.pi / 6
                 t = torch.randn(3) / np.sqrt(3)    # 1.0 Angstrom
                 R, t = R.float().to(x.device), t.float().to(x.device)
                 xc = x[ligand_index].mean(dim=0)
@@ -390,46 +368,47 @@ class dyAdjMatch(nn.Module):
             # generate a realization from p_{\theta}
             trajs, dts = self.opt.realization(batch, sde_step=self.rl_sde_step)
 
-        # compute lean adjoint state
-        x1 = trajs[-1]
-        x1.requires_grad = True
-        rewards = []
-        for i in range(abid[-1] + 1):
-            rewards.append(compute_crmsd_torch(x1[abid == i], x_ref[abid == i], aligned=False))
-        rewards = torch.stack(rewards)
-        a = compute_grad(rewards, x1, create_graph=False).detach()
+        with torch.enable_grad():
+            # compute lean adjoint state
+            x1 = trajs[-1]
+            x1.requires_grad = True
+            rewards = []
+            for i in range(abid[-1] + 1):
+                rewards.append(compute_crmsd_torch(x1[abid == i], x_ref[abid == i], aligned=False))
+            rewards = torch.stack(rewards)
+            a = compute_grad(rewards, x1, create_graph=False).detach()
 
-        # decode: bridge matching
-        t_all_one = torch.ones(N, 1, dtype=x.dtype, device=x.device)
-        # uniformly sample time step
-        t_idx = np.random.choice(range(len(dts)))
-        t = dts[t_idx]
-        # solve backward SDE
-        dts = np.append(dts, 1.0)   # [0.0, 0.02, ..., 1.0]
-        for i in reversed(range(t_idx + 1, len(dts))):
-            s, ds = dts[i], dts[i] - dts[i - 1]
-            t_diff = t_all_one * s
-            xs = trajs[i]
-            xs.requires_grad = True
-            # construct edges
-            d_edge_index, d_edge_weight_s, d_edge_vec_s, bond_type = construct_edges(
-                Z=z, X=xs, bid=abid, mask=edge_mask, bond_index=bond_index,
-                cutoff_lower=self.cutoff_lower,
-                cutoff_upper=self.cutoff_upper,
-                cutoff_H=self.cutoff_H,
-                k_neighbors=self.k_neighbors
-            )
-            d_edge_atm_0 = x_rep[d_edge_index.transpose(0, 1)]      # (Ef, 2, 3)
-            d_edge_vec_0 = d_edge_atm_0[:, 0] - d_edge_atm_0[:, 1]  # (Ef, 3)
-            d_edge_weight_0 = torch.norm(d_edge_vec_0, dim=-1)      # (Ef,)
-            # compute drift term of p_{ref}
-            _, drf_pred = self.ref.decode(z, b, xs, t_diff, abid, d_edge_index,
-                                          d_edge_weight_0, d_edge_vec_0,
-                                          d_edge_weight_s, d_edge_vec_s,
-                                          bond_type)
-            # compute vector-Jaccobian product (vjp)
-            vjp = compute_grad(drf_pred, xs, grad_outputs=a, create_graph=False).detach() # (N, 3)
-            a = a + ds * vjp
+            # decode: bridge matching
+            t_all_one = torch.ones(N, 1, dtype=x.dtype, device=x.device)
+            # uniformly sample time step
+            t_idx = np.random.choice(range(len(dts)))
+            t = dts[t_idx]
+            # solve backward SDE
+            dts = np.append(dts, 1.0)   # [0.0, 0.02, ..., 1.0]
+            for i in reversed(range(t_idx + 1, len(dts))):
+                s, ds = dts[i], dts[i] - dts[i - 1]
+                t_diff = t_all_one * s
+                xs = trajs[i]
+                xs.requires_grad = True
+                # construct edges
+                d_edge_index, d_edge_weight_s, d_edge_vec_s, bond_type = construct_edges(
+                    Z=z, X=xs, bid=abid, mask=edge_mask, bond_index=bond_index,
+                    cutoff_lower=self.cutoff_lower,
+                    cutoff_upper=self.cutoff_upper,
+                    cutoff_H=self.cutoff_H,
+                    k_neighbors=self.k_neighbors
+                )
+                d_edge_atm_0 = x_rep[d_edge_index.transpose(0, 1)]      # (Ef, 2, 3)
+                d_edge_vec_0 = d_edge_atm_0[:, 0] - d_edge_atm_0[:, 1]  # (Ef, 3)
+                d_edge_weight_0 = torch.norm(d_edge_vec_0, dim=-1)      # (Ef,)
+                # compute drift term of p_{ref}
+                _, drf_pred = self.ref.decode(z, b, xs, t_diff, abid, d_edge_index,
+                                            d_edge_weight_0, d_edge_vec_0,
+                                            d_edge_weight_s, d_edge_vec_s,
+                                            bond_type)
+                # compute vector-Jaccobian product (vjp)
+                vjp = compute_grad(drf_pred, xs, grad_outputs=a, create_graph=False).detach() # (N, 3)
+                a = a + ds * vjp
         # get the lean adjoint state $a$ w.r.t. $t$
         t_diff = t_all_one * t
         xt = trajs[t_idx]

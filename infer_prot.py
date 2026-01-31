@@ -14,11 +14,6 @@ from config import infer_config, dict_to_namespace
 from data import *
 from utils import load_file
 from utils.random_seed import setup_seed, SEED
-from simulation import (
-    get_default_parameters,
-    get_simulation_environment_from_pdb,
-    spring_constraint_energy_minimization
-)
 
 ### set backend == "pytorch"
 os.environ["GEOMSTATS_BACKEND"] = "pytorch"
@@ -129,7 +124,8 @@ def main(args):
         res.append([pdb_name, elapsed_time])
 
     df = pd.DataFrame(res, columns=cols)
-    df.to_csv(os.path.join(save_dir, f'infer_time_ode{args.sde_step}_inf{args.inf_step}.csv'), index=False)
+    mode = 'all' if args.mode == 'all' else args.name
+    df.to_csv(os.path.join(save_dir, f'{mode}_ode{args.sde_step}_inf{args.inf_step}.csv'), index=False)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+dataset: protein                        # specify the data type: protein monomers ("protein"), MISATO ("misato"), PDBBind ("pdbbind")
+name: none                              # specify an id for the test system if mode == "single", otherwise the parameter is not used
+mode: all                               # "all": generate trajectories for multiple cases, "single": one test case
+test_set: dataset/ATLAS/test.jsonl      # specify the indexing file (.jsonl) path for the test set if mode == "all", otherwise specify the PDB file path (.pdb) as the initial state
+ckpt: /path/to/ckpt/pvb_atlas.ckpt      # checkpoint path
+refiner: null                           # NOT USED in our experiment
+save_dir: null                          # if null, save trajectories to the same directory as ckpt
+inf_step: 1000                          # trajectory rollouts, default: 1000
+sde_step: 10                            # discrete SDE steps, default: 10
+batch_size: 1                           # number of trajectories in parallel, default: 1
+gpu: 0                                  # GPU index, -1 for CPU only
